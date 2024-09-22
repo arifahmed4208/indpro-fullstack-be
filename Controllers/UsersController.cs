@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using IndProBackend.Context;
 using IndProBackend.Entities;
+using IndProBackend.Interfaces;
+using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Authorization;
 
 namespace IndProBackend.Controllers
 {
@@ -14,32 +17,33 @@ namespace IndProBackend.Controllers
     [ApiController]
     public class UsersController : ControllerBase
     {
-        private readonly MyContext _context;
+        private readonly IUserService _userService;
 
-        public UsersController(MyContext context)
+        public UsersController(IUserService userService)
         {
-            _context = context;
+            _userService = userService;
         }
 
         // GET: api/Users
         [HttpGet]
         public async Task<ActionResult<IEnumerable<User>>> GetUsers()
         {
-            return await _context.Users.ToListAsync();
+            var users = await _userService.GetAllUsersAsync();
+            return Ok(users);
         }
 
         // GET: api/Users/5
         [HttpGet("{id}")]
         public async Task<ActionResult<User>> GetUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userService.GetUserByIdAsync(id);
 
             if (user == null)
             {
                 return NotFound();
             }
 
-            return user;
+            return Ok(user);
         }
 
         // PUT: api/Users/5
@@ -52,22 +56,17 @@ namespace IndProBackend.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(user).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _userService.UpdateUserAsync(user);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!UserExists(id))
+                if (!await _userService.UserExistsAsync(id))
                 {
                     return NotFound();
                 }
-                else
-                {
-                    throw;
-                }
+                throw;
             }
 
             return NoContent();
@@ -78,31 +77,43 @@ namespace IndProBackend.Controllers
         [HttpPost]
         public async Task<ActionResult<User>> PostUser(User user)
         {
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetUser", new { id = user.Id }, user);
+            var createdUser = await _userService.CreateUserAsync(user);
+            return CreatedAtAction("GetUser", new { id = createdUser.Id }, createdUser);
         }
 
         // DELETE: api/Users/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userService.GetUserByIdAsync(id);
             if (user == null)
             {
                 return NotFound();
             }
 
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-
+            await _userService.DeleteUserAsync(id);
             return NoContent();
         }
 
-        private bool UserExists(int id)
+        // POST: api/login
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
         {
-            return _context.Users.Any(e => e.Id == id);
+            var token = await _userService.AuthenticateUserAsync(loginRequest.UsernameOrEmail, loginRequest.Password);
+
+            if (token == null)
+            {
+                return Unauthorized();
+            }
+
+            return Ok(new { Token = token });
+        }
+
+        [AllowAnonymous]
+        public class LoginRequest
+        {
+            public required string UsernameOrEmail { get; set; }
+            public required string Password { get; set; }
         }
     }
 }
