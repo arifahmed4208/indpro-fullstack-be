@@ -42,7 +42,7 @@ This is a .NET Core 8 Web API project that connects to a local SQL Server databa
 
 2. Run the application:
    ```
-  ctrl+F5
+    ctrl+F5
    ```
 
 3. The API will be available at `https://localhost:5001` and `http://localhost:5000`
