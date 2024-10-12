@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using IndProBackend.Context;
 using IndProBackend.Entities;
+using Microsoft.AspNetCore.Authorization;
 
 namespace IndProBackend.Controllers
 {
@@ -23,6 +24,7 @@ namespace IndProBackend.Controllers
 
         // GET: api/Products
         [HttpGet]
+        [Authorize(Roles = "user,admin")]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
             return await _context.Products.ToListAsync();
@@ -44,6 +46,7 @@ namespace IndProBackend.Controllers
 
         // PUT: api/Products/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [Authorize(Roles = "admin")]
         [HttpPut("{id}")]
         public async Task<IActionResult> PutProduct(int id, Product product)
         {
@@ -75,6 +78,7 @@ namespace IndProBackend.Controllers
 
         // POST: api/Products
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [Authorize(Roles = "admin")]
         [HttpPost]
         public async Task<ActionResult<Product>> PostProduct(Product product)
         {
@@ -85,6 +89,7 @@ namespace IndProBackend.Controllers
         }
 
         // DELETE: api/Products/5
+        [Authorize(Roles = "admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {

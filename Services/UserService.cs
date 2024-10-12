@@ -24,8 +24,13 @@ namespace IndProBackend.Services
 
         public async Task<User> CreateUserAsync(User user)
         {
-            //var key = GetHmacKey();
-            //user.Password = HashPassword(user.Password, key);//Not working during login
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Username == user.Username || u.Email == user.Email);
+            if (existingUser != null)
+            {
+                throw new InvalidOperationException("A user with this username or email already exists.");
+            }
+            var key = GetHmacKey();
+            user.Password = HashPassword(user.Password, key);//Not working during login
             user.Created_At = DateTime.UtcNow;
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
@@ -72,19 +77,21 @@ namespace IndProBackend.Services
             Array.Copy(hash, 0, hashBytes, key.Length, hash.Length);
 
             return Convert.ToBase64String(hashBytes);
+
         }
 
         public async Task<string?> AuthenticateUserAsync(string usernameOrEmail, string password)
         {
-            //var user = await _context.Users
-            //    .FirstOrDefaultAsync(u => u.Username == usernameOrEmail || u.Email == usernameOrEmail);
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => (u.Username == usernameOrEmail || u.Email == usernameOrEmail) && u.Password==password);
+                .FirstOrDefaultAsync(u => u.Username == usernameOrEmail || u.Email == usernameOrEmail);
 
-            //if (user == null || !VerifyPassword(password, user.Password))
-            //{
-            //    return null; // Invalid username/email or password
-            //}
+            var key = GetHmacKey();
+            var newHashedPassword = HashPassword(password, key);//Not working during login
+
+            if (user !=null && newHashedPassword != user.Password)
+            {
+                return null; // Invalid username/email or password
+            }
 
             if (user == null)
             {
@@ -106,16 +113,15 @@ namespace IndProBackend.Services
 
         private string GenerateJwtToken(User user)
         {
-
-            var symmetricSecurityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value));
+            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!);
+            var symmetricSecurityKey = new SymmetricSecurityKey(key);
             var signingCredentails = new SigningCredentials(symmetricSecurityKey, SecurityAlgorithms.HmacSha256);
-            List<Claim> claims = new List<Claim>();
-            Claim claim = new Claim(JwtRegisteredClaimNames.Sub, user.Username);
-            Claim claim2 = new Claim(JwtRegisteredClaimNames.Email, user.Email);
-            Claim claim3 = new Claim("id", user.Id.ToString());
-            claims.Add(claim);
-            claims.Add(claim2);
-            claims.Add(claim3);
+            List<Claim> claims = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Username),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim("id", user.Id.ToString())
+            };
             if (user.Username == "admin")
             {
                 Claim claim4 = new Claim("role", "admin");
@@ -126,20 +132,30 @@ namespace IndProBackend.Services
                 Claim claim4 = new Claim("role", "user");
                 claims.Add(claim4);
             }
-            var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(Convert.ToInt32(_configuration["Jwt:DurationInMinutes"])),
-                signingCredentials: signingCredentails
-                );
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            //var token = new JwtSecurityToken(
+            //    issuer: _configuration["Jwt:Issuer"],
+            //    audience: _configuration["Jwt:Audience"],
+            //    claims: claims,
+            //    expires: DateTime.UtcNow.AddMinutes(Convert.ToInt32(_configuration["Jwt:DurationInMinutes"])),
+            //    signingCredentials: signingCredentails
+            //    );
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var tokenDescription = new SecurityTokenDescriptor { 
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddHours(1),
+                Issuer = _configuration["Jwt:Issuer"],
+                Audience = _configuration["Jwt:Audience"],
+                SigningCredentials = signingCredentails
+            };
+            var token = tokenHandler.CreateToken(tokenDescription);
+            return tokenHandler.WriteToken(token);
 
         }
 
         private byte[] GetHmacKey()
         {
-            return Encoding.UTF8.GetBytes(_configuration["Security:HmacKey"]);
+            var key = _configuration.GetSection("Security:HmacKey").Value!;
+            return Encoding.UTF8.GetBytes(key);
         }
     }
 }

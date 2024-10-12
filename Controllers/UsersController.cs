@@ -92,7 +92,11 @@ namespace IndProBackend.Controllers
             }
 
             await _userService.DeleteUserAsync(id);
-            return NoContent();
+            return Ok(new
+            {
+                message = $"User with Id {id} deleted successfully",
+                deletedUser = user
+            });
         }
 
         // POST: api/login

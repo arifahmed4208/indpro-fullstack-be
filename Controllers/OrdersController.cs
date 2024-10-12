@@ -78,6 +78,11 @@ namespace IndProBackend.Controllers
         [HttpPost]
         public async Task<ActionResult<Order>> PostOrder(Order order)
         {
+            var user = await _context.Users.FindAsync(order.UserId);
+            if (user == null)
+            {
+                throw new InvalidOperationException("Invalid userid");
+            }
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
